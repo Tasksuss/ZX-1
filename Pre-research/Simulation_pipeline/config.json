@@ -1,0 +1,55 @@
+{
+  "real_data_root": "/Users/apple/Downloads/Simulation/larnyx_trimmed1.9s",
+  "output_root": "/Users/apple/Downloads/Simulation/outputs",
+  "real_profile_dir": "/Users/apple/Downloads/Simulation/outputs/real_profile",
+  "sim_output_root": "/Users/apple/Downloads/Simulation/outputs/simulated_data",
+  "experiment_root": "/Users/apple/Downloads/Simulation/outputs/experiments",
+  "analysis_root": "/Users/apple/Downloads/Simulation/outputs/analysis",
+  "classes": [
+    "banana",
+    "cocoro",
+    "nana",
+    "tomorrow",
+    "tuesday",
+    "yesterday"
+  ],
+  "subjects_train": [
+    "Subj3",
+    "Subj4",
+    "Subj5"
+  ],
+  "subjects_test": [
+    "Subj1"
+  ],
+  "synthetic_subjects_train": [
+    "SynSubj3",
+    "SynSubj4",
+    "SynSubj5"
+  ],
+  "synthetic_subjects_test": [
+    "SynSubj1"
+  ],
+  "image_size": [
+    256,
+    192
+  ],
+  "target_frame_count": 16,
+  "dataset_sizes": [
+    5,
+    10,
+    20,
+    40,
+    80
+  ],
+  "num_repeats": 3,
+  "epochs": 20,
+  "batch_size": 16,
+  "lr": 0.0001,
+  "weight_decay": 0.0003,
+  "num_workers": 0,
+  "generator_profile_path": "/Users/apple/Downloads/Simulation/outputs/real_profile/dataset_profile.json",
+  "synthetic_videos_per_class_subject_train": 80,
+  "synthetic_videos_per_class_subject_test": 30,
+  "synthetic_export_mp4_samples": 2,
+  "seed": 42
+}

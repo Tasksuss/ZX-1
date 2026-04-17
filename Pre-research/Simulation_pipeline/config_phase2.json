@@ -1,0 +1,143 @@
+{
+  "real_data_root": "/Users/apple/Downloads/Simulation/larnyx_trimmed1.9s",
+  "output_root": "/Users/apple/Downloads/Simulation/outputs",
+  "real_profile_dir": "/Users/apple/Downloads/Simulation/outputs/real_profile",
+  "sim_output_root": "/Users/apple/Downloads/Simulation/outputs/simulated_data_phase2",
+  "experiment_root": "/Users/apple/Downloads/Simulation/outputs/experiments_phase2",
+  "analysis_root": "/Users/apple/Downloads/Simulation/outputs/phase2_analysis",
+  "report_root": "/Users/apple/Downloads/Simulation/outputs/phase2_report",
+  "classes": [
+    "banana",
+    "cocoro",
+    "nana",
+    "tomorrow",
+    "tuesday",
+    "yesterday"
+  ],
+  "subjects_train": [
+    "Subj3",
+    "Subj4",
+    "Subj5"
+  ],
+  "subjects_test": [
+    "Subj1"
+  ],
+  "synthetic_subjects_train": [
+    "SynSubj3",
+    "SynSubj4",
+    "SynSubj5"
+  ],
+  "synthetic_subjects_test": [
+    "SynSubj1"
+  ],
+  "image_size": [
+    256,
+    192
+  ],
+  "target_frame_count": 16,
+  "dataset_sizes": [
+    80,
+    120,
+    160,
+    240,
+    320
+  ],
+  "num_repeats": 3,
+  "epochs": 40,
+  "batch_size": 16,
+  "lr": 0.0001,
+  "weight_decay": 0.0003,
+  "num_workers": 0,
+  "cache_train_in_memory": true,
+  "generator_profile_path": "/Users/apple/Downloads/Simulation/outputs/real_profile/dataset_profile.json",
+  "synthetic_videos_per_class_subject_train": 320,
+  "synthetic_videos_per_class_subject_test": 60,
+  "synthetic_export_mp4_samples": 2,
+  "generation_frame_count": 16,
+  "seed": 42,
+  "dashboard_port": 8765,
+  "phase1_baseline": {
+    "epochs": 20,
+    "lr": 0.0001,
+    "weight_decay": 0.0003,
+    "early_stopping": false,
+    "patience": null,
+    "selection_metric": "real_test_loss"
+  },
+  "phase2": {
+    "target_metric": "synthetic_test_accuracy",
+    "target_threshold": 90.0,
+    "registry_path": "/Users/apple/Downloads/Simulation/outputs/phase2_analysis/phase2_experiment_registry.csv",
+    "setting_comparison_path": "/Users/apple/Downloads/Simulation/outputs/phase2_analysis/phase2_setting_comparison.csv",
+    "config_snapshot_path": "/Users/apple/Downloads/Simulation/outputs/phase2_analysis/phase2_config_snapshot.json",
+    "dashboard_status_path": "/Users/apple/Downloads/Simulation/outputs/phase2_analysis/dashboard_status.json",
+    "stage_a1_sizes": [
+      80,
+      120,
+      160,
+      240,
+      320
+    ],
+    "stage_a2_sizes": [
+      80,
+      160,
+      240
+    ],
+    "stage_c_default_sizes": [
+      180,
+      200,
+      220,
+      240
+    ],
+    "settings_groups": {
+      "group_A1": {
+        "setting_label": "A1_baseline_plus",
+        "epochs": 40,
+        "lr": 0.0001,
+        "weight_decay": 0.0003,
+        "early_stopping": true,
+        "patience": 8,
+        "selection_metric": "synthetic_test_loss",
+        "changed_from_baseline": "epochs: 20 -> 40; early_stopping: off -> on; selection_metric: real_test_loss -> synthetic_test_loss",
+        "change_note": "Phase 2 baseline expansion setting",
+        "rationale": "Use a stronger but still conservative training baseline before searching for the 90 percent threshold."
+      },
+      "group_B1": {
+        "setting_label": "B1_lr1e-4_ep40",
+        "epochs": 40,
+        "lr": 0.0001,
+        "weight_decay": 0.0003,
+        "early_stopping": true,
+        "patience": 8,
+        "selection_metric": "synthetic_test_loss",
+        "changed_from_baseline": "epochs: 20 -> 40; early_stopping: off -> on; selection_metric: real_test_loss -> synthetic_test_loss",
+        "change_note": "Baseline-plus reference group",
+        "rationale": "Reference training setting for phase 2 search."
+      },
+      "group_B2": {
+        "setting_label": "B2_lr3e-4_ep40",
+        "epochs": 40,
+        "lr": 0.0003,
+        "weight_decay": 0.0003,
+        "early_stopping": true,
+        "patience": 8,
+        "selection_metric": "synthetic_test_loss",
+        "changed_from_baseline": "epochs: 20 -> 40; lr: 1e-4 -> 3e-4; early_stopping: off -> on; selection_metric: real_test_loss -> synthetic_test_loss",
+        "change_note": "Higher learning-rate comparison group",
+        "rationale": "Test whether faster optimization improves synthetic-test accuracy."
+      },
+      "group_B3": {
+        "setting_label": "B3_lr1e-4_ep60",
+        "epochs": 60,
+        "lr": 0.0001,
+        "weight_decay": 0.0003,
+        "early_stopping": true,
+        "patience": 10,
+        "selection_metric": "synthetic_test_loss",
+        "changed_from_baseline": "epochs: 20 -> 60; early_stopping: off -> on; selection_metric: real_test_loss -> synthetic_test_loss",
+        "change_note": "Longer training comparison group",
+        "rationale": "Test whether a longer optimization budget improves synthetic-test accuracy."
+      }
+    }
+  }
+}
