@@ -1,4 +1,4 @@
-# Packup
+# Pre-research
 
 This folder collects the main workflow code from the `PCA&LDA` and `Simulation` projects in a compact, portable structure.
 
