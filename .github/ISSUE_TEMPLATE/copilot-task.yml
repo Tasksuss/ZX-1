@@ -1,0 +1,26 @@
+name: Copilot task
+description: Create a task for the Copilot cloud agent workflow
+title: "[copilot] "
+labels:
+  - copilot
+body:
+  - type: markdown
+    attributes:
+      value: |
+        To avoid known Copilot workflow failures, do not paste Markdown image embeds like `![alt](...)` in this issue.
+        If visuals are required, describe them in text or link directly to an image URL that includes a file extension (for example `.png` or `.jpg`).
+  - type: checkboxes
+    id: input-check
+    attributes:
+      label: Input validation
+      options:
+        - label: I did not include Markdown image embeds (`![...](...)`) in this task description.
+          required: true
+  - type: textarea
+    id: task
+    attributes:
+      label: Task description
+      description: Describe what Copilot should do.
+      placeholder: Explain the goal, expected output, and any constraints.
+    validations:
+      required: true
