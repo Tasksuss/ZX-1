@@ -8,7 +8,7 @@ body:
     attributes:
       value: |
         Use this form for Copilot cloud agent tasks.
-        **Do not embed images with Markdown syntax** (for example `![...](...)`) because it can break the Copilot workflow.
+        **Do not embed images with Markdown syntax** (for example, `![...](...)`) because it can break the Copilot workflow.
         If needed, include plain links instead.
 
   - type: textarea
@@ -16,7 +16,7 @@ body:
     attributes:
       label: Task description
       description: Describe what you want Copilot to accomplish.
-      placeholder: Explain what needs to be fixed.
+      placeholder: Describe the task you want Copilot to perform.
     validations:
       required: true
 
