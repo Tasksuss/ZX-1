@@ -1,0 +1,38 @@
+name: Copilot Task
+description: Request a Copilot cloud agent task
+title: "[copilot] "
+labels:
+  - copilot
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form for Copilot cloud agent tasks.
+        **Do not embed images with Markdown syntax** (for example `![...](...)`) because it can break the copilot workflow.
+        If needed, include plain links instead.
+
+  - type: textarea
+    id: problem_statement
+    attributes:
+      label: Problem statement
+      description: Describe the issue and expected outcome.
+      placeholder: Explain what needs to be fixed.
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context (links only)
+      description: Include references, logs, or screenshots as plain URLs (no Markdown image embeds).
+      placeholder: https://github.com/user-attachments/assets/...
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: validation
+    attributes:
+      label: Validation
+      options:
+        - label: I did not embed images with Markdown syntax (`![...](...)`).
+          required: true
