@@ -1,6 +1,5 @@
 import os
-import re
-import cv2
+import json
 import argparse
 import numpy as np
 import pandas as pd
@@ -10,8 +9,10 @@ from pathlib import Path
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
-from sklearn.model_selection import LeaveOneOut, cross_val_score
-from sklearn.svm import SVC
+from evaluation import (
+    CV_MODES, MODELS, evaluate_features, parse_subject_word_from_path,
+    save_evaluation, select_splits, source_clip_id, validate_inputs,
+)
 
 VIDEO_EXTS = {".mp4", ".avi", ".mov", ".mkv", ".MP4", ".AVI", ".MOV", ".MKV"}
 
@@ -28,50 +29,6 @@ def safe_std(x, eps=1e-8):
     return s if s > eps else eps
 
 
-def parse_subject_word_from_path(video_path: Path):
-    """从路径解析 subject 和 word（保持原逻辑）"""
-    parts = video_path.parts
-    subject = "unknown_subject"
-    word = "unknown_word"
-    split = "unknown_split"
-
-    for p in parts:
-        if p.lower() in ["train", "val", "valid", "validation", "test"]:
-            split = p.lower()
-            break
-
-    for p in parts[::-1]:
-        m = re.match(r"^(Subj[^-/\\]+)[-_](.+)$", p, re.IGNORECASE)
-        if m:
-            subject = m.group(1)
-            word = m.group(2)
-            return subject, word, split
-
-    for p in parts:
-        if re.match(r"^Subj", p, re.IGNORECASE):
-            subject = p
-            break
-
-    if split != "unknown_split":
-        try:
-            idx = [i for i, p in enumerate(parts) if p.lower() == split][0]
-            if idx + 1 < len(parts):
-                candidate = parts[idx + 1]
-                if not re.match(r"^Subj", candidate, re.IGNORECASE):
-                    word = candidate
-                elif idx + 2 < len(parts):
-                    word = parts[idx + 2]
-        except Exception:
-            pass
-
-    if word == "unknown_word":
-        parent = video_path.parent.name
-        if not re.match(r"^Subj", parent, re.IGNORECASE):
-            word = parent
-
-    return subject, word, split
-
-
 def list_videos(root):
     videos = []
     for p in Path(root).rglob("*"):
@@ -82,6 +39,8 @@ def list_videos(root):
 
 def read_video_gray(video_path, target_size=(128, 128), target_frames=24):
     """读取视频并返回灰度帧序列 (T, H, W)，归一化到 [0,1]"""
+    import cv2  # Only video extraction requires OpenCV.
+
     cap = cv2.VideoCapture(str(video_path))
     if not cap.isOpened():
         raise RuntimeError(f"Cannot open video: {video_path}")
@@ -215,7 +174,7 @@ def fit_pca_projection(X, n_components=2):
 
 def pca_plot(X, meta_df, color_by="word", style_by="subject",
              out_path="pca.png", title="PCA", return_model=False):
-    """原始 PCA 散点图（自适应颜色和形状）"""
+    """Exploratory full-cohort PCA scatter plot, not held-out evaluation."""
     if len(X) < 2:
         print(f"[WARN] Not enough samples for PCA: {title}")
         return
@@ -236,7 +195,7 @@ def pca_plot(X, meta_df, color_by="word", style_by="subject",
 
     # 动态分配颜色（使用 colormap）
     # 如果类别数超过 colormap 长度，则循环使用
-    cmap = plt.cm.get_cmap('tab10')  # 可选 'tab20', 'Set3' 等
+    cmap = plt.get_cmap('tab10')  # 可选 'tab20', 'Set3' 等
     color_list = [cmap(i % cmap.N) for i in range(len(color_categories))]
     color_map = {cat: color_list[i] for i, cat in enumerate(color_categories)}
 
@@ -263,8 +222,8 @@ def pca_plot(X, meta_df, color_by="word", style_by="subject",
 
     evr = pca.explained_variance_ratio_
     plt.xlabel(f"PC1 ({evr[0] * 100:.1f}%)")
-    plt.ylabel(f"PC2 ({evr[1] * 100:.1f}%)")
-    plt.title(title)
+    plt.ylabel(f"PC2 ({evr[1] * 100:.1f}%)" if len(evr) > 1 else "PC2 (not available; padded with zeros)")
+    plt.title(title + "\nExploratory: fitted on all displayed samples")
     # 避免图例过长，可以只显示颜色对应的词，形状对应的被试可省略（但为了清晰保留）
     # 如果图例条目太多，可以设置 ncol 或调整位置
     plt.legend(fontsize=7, bbox_to_anchor=(1.02, 1), loc="upper left")
@@ -399,7 +358,7 @@ def save_variance_map(X, img_shape, feature_name, save_dir, cmap="hot"):
 
 def lda_plot(X, meta_df, color_by="word", style_by="subject",
              out_path="lda.png", title="LDA"):
-    """原始 LDA 散点图（自适应颜色和形状）"""
+    """Full-cohort supervised exploratory plot; never a validation score."""
     if len(X) < 2:
         print(f"[WARN] Not enough samples for LDA: {title}")
         return None, None
@@ -417,7 +376,7 @@ def lda_plot(X, meta_df, color_by="word", style_by="subject",
 
     scaler = StandardScaler()
     Xs = scaler.fit_transform(X)
-    n_components = min(2, len(unique_labels) - 1)
+    n_components = min(2, len(unique_labels) - 1, Xs.shape[1])
     lda = LinearDiscriminantAnalysis(n_components=n_components)
     Z = lda.fit_transform(Xs, labels)
     if Z.shape[1] == 1:
@@ -431,7 +390,7 @@ def lda_plot(X, meta_df, color_by="word", style_by="subject",
     color_categories = sorted(df[color_by].unique())
     style_categories = sorted(df[style_by].unique())
 
-    cmap = plt.cm.get_cmap('tab10')
+    cmap = plt.get_cmap('tab10')
     color_list = [cmap(i % cmap.N) for i in range(len(color_categories))]
     color_map = {cat: color_list[i] for i, cat in enumerate(color_categories)}
 
@@ -457,28 +416,25 @@ def lda_plot(X, meta_df, color_by="word", style_by="subject",
 
     explained_ratio = lda.explained_variance_ratio_ if hasattr(lda, 'explained_variance_ratio_') else [1.0, 0.0]
     plt.xlabel(f"LD1 ({explained_ratio[0] * 100:.1f}%)")
-    plt.ylabel(f"LD2 ({explained_ratio[1] * 100:.1f}%)")
-    plt.title(title)
+    plt.ylabel(f"LD2 ({explained_ratio[1] * 100:.1f}%)" if len(explained_ratio) > 1 else "LD2 (not available; padded with zeros)")
+    plt.title(title + "\nExploratory: fitted on all displayed samples and word labels")
     plt.legend(fontsize=7, bbox_to_anchor=(1.02, 1), loc="upper left")
     plt.tight_layout()
     plt.savefig(out_path, dpi=180)
     plt.close()
 
-    # 留一法分类准确率（保持不变）
-    loo = LeaveOneOut()
-    svm = SVC(kernel='linear')
-    try:
-        scores = cross_val_score(svm, Xs, labels, cv=loo, scoring='accuracy')
-        print(f"[LDA] {title}: LOO accuracy = {np.mean(scores):.3f} ± {np.std(scores):.3f}")
-    except Exception as e:
-        print(f"[LDA] {title}: Could not compute LOO accuracy: {e}")
-
+    # Evaluation uses fresh fold-local Pipelines in evaluation.py.
     return lda, scaler
 
 
 # =========================================================
 # One-vs-Rest LDA weight map visualization
 # =========================================================
+def backproject_lda_direction(pca, scaler, lda):
+    """Raw-feature LD1 weights; centring terms belong to the intercept."""
+    return pca.components_.T @ (lda.scalings_[:, :1] / scaler.scale_[:, None])
+
+
 def visualize_one_vs_rest_weights(features, labels, img_shape, feature_name, save_dir, pca_components=50):
     """
     对每个类别，训练一个“该类 vs 其余”的二分类 LDA，
@@ -498,6 +454,12 @@ def visualize_one_vs_rest_weights(features, labels, img_shape, feature_name, sav
     from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
     from sklearn.preprocessing import LabelEncoder
 
+    labels = np.asarray(labels)
+    classes, counts = np.unique(labels, return_counts=True)
+    if len(classes) < 2 or min(counts) < 2:
+        print(f"[WARN] Skipping exploratory weight maps: insufficient class support ({feature_name})")
+        return
+    ensure_dir(save_dir)
     # PCA 降维
     n_samples, n_features = features.shape
     max_components = min(pca_components, n_features, n_samples - 1)
@@ -522,7 +484,9 @@ def visualize_one_vs_rest_weights(features, labels, img_shape, feature_name, sav
         lda.fit(X_scaled, binary_labels)
 
         # 组合权重：原始像素 → PCA → LDA
-        combined_weight = pca.components_.T @ lda.scalings_  # (n_features, 1)
+        # Undo PCA-score standardisation before mapping the LD1 direction back.
+        # Centring changes the intercept, not these linear projection weights.
+        combined_weight = backproject_lda_direction(pca, scaler, lda)
         w_img = combined_weight.reshape(img_shape)
 
         # 可视化
@@ -533,10 +497,10 @@ def visualize_one_vs_rest_weights(features, labels, img_shape, feature_name, sav
         axes[0].axis('off')
         plt.colorbar(im1, ax=axes[0])
         im2 = axes[1].imshow(np.abs(w_img), cmap='hot')
-        axes[1].set_title(f'{target_class} vs rest\nimportance')
+        axes[1].set_title(f'{target_class} vs rest\nabsolute projection weight')
         axes[1].axis('off')
         plt.colorbar(im2, ax=axes[1])
-        plt.suptitle(f'{feature_name} - One-vs-Rest LDA weight map')
+        plt.suptitle(f'{feature_name} - Exploratory One-vs-Rest LD1 projection weights')
         out_path = os.path.join(save_dir, f'{feature_name}_OvR_{target_class}_weights.png')
         plt.savefig(out_path, dpi=150)
         plt.close()
@@ -572,7 +536,20 @@ def main():
                         help="number of components to show in scree plots")
     parser.add_argument("--pca_mode_scale", type=float, default=2.0,
                         help="scale factor for PCA mode visualization")
+    parser.add_argument("--evaluate", action="store_true", help="Also run fold-local classification")
+    parser.add_argument("--evaluation_splits", nargs="+", help="Explicit cohort split names, or all")
+    parser.add_argument("--cv", choices=CV_MODES, nargs="+", default=["loso"])
+    parser.add_argument("--models", choices=MODELS, nargs="+", default=["linear_svm", "lda_svm"])
+    parser.add_argument("--group_folds", type=int, default=5)
+    parser.add_argument("--eval_pca_components", type=int, default=50)
+    parser.add_argument("--svm_c", type=float, default=1.0)
+    parser.add_argument("--data_kind", choices=["real", "synthetic", "unspecified"], default="unspecified")
+    parser.add_argument("--preprocessing_note", default="Legacy folder-reference preprocessing may share clips and use word-specific references; provenance unverified.")
     args = parser.parse_args()
+    if args.evaluate and (not args.evaluation_splits or args.data_kind == "unspecified"):
+        parser.error("--evaluate requires --evaluation_splits and an explicit --data_kind")
+    if min(args.size) < 1 or args.frames < 2 or not 1 <= args.diff_lag < args.frames:
+        parser.error("size must be positive and 1 <= diff_lag < frames")
 
     target_h, target_w = args.size
     input_root = Path(args.input_root)
@@ -605,7 +582,20 @@ def main():
         videos = videos[:args.max_videos]
     print(f"[INFO] found {len(videos)} videos")
 
+    # Validate path labels and derivative identity before loading videos. A root
+    # containing both full/ and crop/ is not an independent-sample dataset.
+    parsed = {}
+    ids = set()
+    for vp in videos:
+        subject, word, split = parse_subject_word_from_path(vp)
+        identity = source_clip_id(subject, word, vp.stem)
+        if identity in ids:
+            raise ValueError(f"Duplicate clip/representation: {identity}. Select one full or crop branch.")
+        ids.add(identity)
+        parsed[vp] = subject, word, split, identity
+
     meta_rows = []
+    failed_videos = []
     feat_raw_mid = []
     feat_raw_mean = []
     feat_mean_absdiff = []
@@ -626,11 +616,13 @@ def main():
             mean_absdiff = np.mean(np.abs(diff), axis=0)
 
             summary = summarize_motion(diff)
-            subject, word, split = parse_subject_word_from_path(vp)
+            subject, word, split, identity = parsed[vp]
             clip_id = vp.stem
 
             meta_rows.append({
                 "clip_id": clip_id,
+                "source_clip_id": identity,
+                "normalization": args.norm,
                 "video_path": str(vp),
                 "split": split,
                 "subject": subject,
@@ -668,11 +660,17 @@ def main():
             print(f"[{i}/{len(videos)}] OK: {vp}")
 
         except Exception as ex:
+            failed_videos.append({"video_path": str(vp), "error": str(ex),
+                                  "features_retained": any(row["video_path"] == str(vp) for row in meta_rows)})
             print(f"[WARN] Failed on {vp}: {ex}")
 
     # =====================================================
     # Save metadata and features
     # =====================================================
+    (output_root / "extraction_run.json").write_text(
+        json.dumps({"arguments": vars(args), "n_videos_found": len(videos), "failures": failed_videos}, indent=2) + "\n",
+        encoding="utf-8",
+    )
     meta_df = pd.DataFrame(meta_rows)
     if len(meta_df) == 0:
         print("[ERROR] no valid videos processed")
@@ -690,6 +688,24 @@ def main():
     np.save(features_dir / "raw_meanframe.npy", feat_raw_mean)
     np.save(features_dir / "mean_absdiff_map.npy", feat_mean_absdiff)
     print("[SAVE] feature arrays done")
+
+    # Run validation independently of exploratory plot fitting. Invalid labels,
+    # missing classes or failed folds abort rather than producing partial scores.
+    if args.evaluate:
+        for feature_name, X in [("raw_midframe", feat_raw_mid), ("raw_meanframe", feat_raw_mean),
+                                ("mean_absdiff_map", feat_mean_absdiff)]:
+            eval_X, eval_meta = select_splits(X, meta_df, args.evaluation_splits)
+            validate_inputs(eval_X, eval_meta)
+            for cv in args.cv:
+                for model in args.models:
+                    report, predictions = evaluate_features(
+                        eval_X, eval_meta, model=model, cv=cv, n_splits=args.group_folds,
+                        pca_components=args.eval_pca_components, svm_c=args.svm_c,
+                        data_kind=args.data_kind, preprocessing_note=args.preprocessing_note,
+                    )
+                    save_evaluation(report, predictions, output_root / "evaluation" / feature_name / cv / model)
+                    print(f"[EVALUATION] {args.data_kind} / {cv} / {model} / {feature_name}: saved OOF results")
+        print("[LIMITATION] CV isolates feature transforms only. Verify upstream preprocessing and recording independence.")
 
     # =====================================================
     # Raw-space variance maps
@@ -778,6 +794,6 @@ if __name__ == "__main__":
 
 
 """
-python analyze_processed_split2.py --input_root /Users/apple/Downloads/Troat/workspace/processed_split --output_root /Users/apple/Downloads/Troat/workspace/analysis_outputs --size 128 128 --frames 24      
+python 05_analyze_processed_split2.py --input_root /Users/apple/Downloads/Troat/workspace/processed_split/crop --output_root /Users/apple/Downloads/Troat/workspace/analysis_outputs --size 128 128 --frames 24
 
 """

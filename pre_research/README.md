@@ -16,7 +16,12 @@ Core scripts for the throat-video preprocessing and PCA/LDA analysis workflow.
 - `04_split_full_crop.py`
   Split processed videos into `full` and `crop` branches for downstream analysis.
 - `05_analyze_processed_split2.py`
-  Extract standardized feature representations, run PCA/LDA, generate plots, and evaluate linear-SVM separability.
+  Extract per-clip features, preserve exploratory PCA/LDA plots, and optionally run fold-local SVM pipelines with subject-held-out validation.
+- `evaluation.py`
+  Standalone evaluation from saved feature matrices and metadata: sample LOO,
+  LOSO or GroupKFold; explicit model names, out-of-fold predictions and provenance.
+- `EVALUATION_REVIEW.md`
+  Technical findings, usage, tests, interpretation limits and required real-data inputs.
 - `LDA_method_notes.md`
   Method note summarizing the LDA formulation and interpretation used in the project.
 
@@ -56,3 +61,13 @@ If you want to understand the pipelines quickly:
 
 - This packup intentionally keeps only the main workflow code and key configuration files.
 - Large outputs, intermediate results, dashboard scripts, notebooks, and figure-only helper scripts are not included here.
+
+## Evaluation status (2026-11-04)
+
+Read [the evaluation review](PCA_LDA_pipeline/EVALUATION_REVIEW.md) before using
+any classification result as evidence of real cross-speaker generalisation.
+Full-cohort PCA/LDA figures are exploratory. The legacy simulation runners use
+nominal test losses for model selection, and their results must be treated as
+development results for those reused sets. The existence of subject lists in a
+configuration does not verify the actual files or split independence. This change
+does not rerun or certify historical experiments or manuscript results.
